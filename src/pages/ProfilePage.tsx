@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import StatCard from "../components/StatCard";
 import { Button } from "../components/ui/button";
-import { Trophy, Coins, MapPin, Grid3X3, Target, Zap, Award, Star, Plus } from "lucide-react";
+import { Trophy, Coins, MapPin, Grid3X3, Target, Zap, Star, Plus } from "lucide-react";
 import { useWallet } from "../contexts/WalletContext";
 
 const badges = [

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../components/ui/button;
+import { Button } from "../components/ui/button";
 import { Input } from "../components/ui//input";
 import VirtualGrid from "../components/VirtualGrid";
 import { Coins, Grid3X3, MapPin, Plus, Link2, UserPlus, Trash2, Send } from "lucide-react";

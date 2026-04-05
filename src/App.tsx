@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Toaster as Sonner } from "../components/ui/sonner";
-import { Toaster } from "../components/ui/toaster";
-import { TooltipProvider } from "../components/ui/tooltip";
-import { WalletProvider } from "../contexts/WalletContext";
-import Layout from "../components/Layout";
+import { Toaster as Sonner } from "../src/components/ui/sonner";
+import { Toaster } from "../src/components/ui/toaster";
+import { TooltipProvider } from "../src/components/ui/tooltip";
+import { WalletProvider } from "../src/contexts/WalletContext";
+import Layout from "../src/components/Layout";
 import Index from "./pages/index.tsx";
 import HuntPage from "./pages/HuntPage.tsx";
 import ScanPage from "./pages/ScanPage.tsx";
