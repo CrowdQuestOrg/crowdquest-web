@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { MapPin } from "lucide-react";
-import forestBg from "@/assets/forest-grid-bg.jpg";
-
+import forestBg from "../assets/forest-grid-bg.jpg";
 const GRID_SIZE = 32;
 const CELL_SIZE = 28;
 

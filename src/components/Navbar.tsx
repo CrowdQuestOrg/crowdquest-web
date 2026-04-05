@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "./ui/button";
 import { MapPin, Grid3X3, User, Menu, X, Compass, LogOut } from "lucide-react";
-import { useWallet } from "@/contexts/WalletContext";
+import { useWallet } from "../contexts/WalletContext";
 
 const navItems = [
   { to: "/", label: "Home", icon: Compass },
