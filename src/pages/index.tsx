@@ -2,8 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Grid3X3, MapPin, Trophy, Coins, ArrowRight } from "lucide-react";
 import { useWallet } from "../contexts/WalletContext";
-import heroBg from "@/assets/hero-bg.jpg";
-
+import heroBg from "../assets/hero-bg.jpg";
 const Index = () => {
   const { isConnected, connect } = useWallet();
 
