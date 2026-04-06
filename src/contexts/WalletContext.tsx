@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { ethers } from "ethers";
+import { CHAIN_ID } from "../constants/contracts";
 
-// 1. Define the Sepolia Network Constants
-const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111 in hex
-const SEPOLIA_RPC_URL = "https://rpc.sepolia.org"; // Or use your Alchemy URL
+const SEPOLIA_CHAIN_ID = `0x${CHAIN_ID.toString(16)}`; 
+const SEPOLIA_RPC_URL = "https://rpc.sepolia.org"; 
 
 interface WalletState {
   address: string | null;
@@ -12,6 +12,8 @@ interface WalletState {
   isConnected: boolean;
   isConnecting: boolean;
   isCorrectNetwork: boolean;
+  provider: ethers.BrowserProvider | null;
+  signer: ethers.JsonRpcSigner | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
@@ -24,6 +26,8 @@ const WalletContext = createContext<WalletState>({
   isConnected: false,
   isConnecting: false,
   isCorrectNetwork: false,
+  provider: null,
+  signer: null,
   connect: async () => {},
   disconnect: () => {},
   switchNetwork: async () => {},
@@ -36,30 +40,46 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
   const [balance, setBalance] = useState<string | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
+  const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
 
-  // Helper to fetch balance and network info
+  /**
+   * Core Logic: Updates the global ethers state
+   */
   const updateWalletInfo = useCallback(async (userAddress: string) => {
-    if (!(window as any).ethereum) return;
+    const ethereum = window.ethereum;
+    if (!ethereum) return;
     
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const network = await provider.getNetwork();
-    const balanceWei = await provider.getBalance(userAddress);
-    
-    setChainId("0x" + network.chainId.toString(16));
-    setBalance(ethers.formatEther(balanceWei));
+    try {
+      const browserProvider = new ethers.BrowserProvider(ethereum);
+      const browserSigner = await browserProvider.getSigner();
+      const network = await browserProvider.getNetwork();
+      const balanceWei = await browserProvider.getBalance(userAddress);
+      
+      setProvider(browserProvider);
+      setSigner(browserSigner);
+      setChainId(`0x${network.chainId.toString(16)}`);
+      setBalance(ethers.formatEther(balanceWei));
+    } catch (error) {
+      console.error("Failed to update wallet info:", error);
+    }
   }, []);
 
+  /**
+   * Helper: Switches or Adds Sepolia Network
+   */
   const switchNetwork = useCallback(async () => {
-    if (!(window as any).ethereum) return;
+    const ethereum = window.ethereum;
+    if (!ethereum) return;
+
     try {
-      await (window as any).ethereum.request({
+      await ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: SEPOLIA_CHAIN_ID }],
       });
     } catch (err: any) {
-      // If the network isn't added to MetaMask, add it
       if (err.code === 4902) {
-        await (window as any).ethereum.request({
+        await ethereum.request({
           method: "wallet_addEthereumChain",
           params: [{
             chainId: SEPOLIA_CHAIN_ID,
@@ -73,15 +93,19 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  /**
+   * Action: Manual Connect
+   */
   const connect = useCallback(async () => {
-    if (typeof window === "undefined" || !(window as any).ethereum) {
+    const ethereum = window.ethereum;
+    if (!ethereum) {
       alert("MetaMask is not installed.");
       return;
     }
 
     setIsConnecting(true);
     try {
-      const accounts: string[] = await (window as any).ethereum.request({
+      const accounts: string[] = await ethereum.request({
         method: "eth_requestAccounts",
       });
 
@@ -90,8 +114,7 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         setAddress(userAddress);
         await updateWalletInfo(userAddress);
         
-        // Ensure user is on Sepolia immediately after connecting
-        const currentChain = await (window as any).ethereum.request({ method: "eth_chainId" });
+        const currentChain = await ethereum.request({ method: "eth_chainId" });
         if (currentChain !== SEPOLIA_CHAIN_ID) {
           await switchNetwork();
         }
@@ -107,11 +130,37 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
     setAddress(null);
     setBalance(null);
     setChainId(null);
+    setProvider(null);
+    setSigner(null);
   }, []);
 
-  // Listen for Account or Network changes
+  /**
+   * CRITICAL: Eager Connection Check (Fixes Reload Issue)
+   */
   useEffect(() => {
-    if (!(window as any).ethereum) return;
+    const checkExistingConnection = async () => {
+      const ethereum = window.ethereum;
+      if (ethereum) {
+        try {
+          const accounts = await ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) {
+            setAddress(accounts[0]);
+            await updateWalletInfo(accounts[0]);
+          }
+        } catch (error) {
+          console.error("Eager connection failed:", error);
+        }
+      }
+    };
+    checkExistingConnection();
+  }, [updateWalletInfo]);
+
+  /**
+   * Listeners: Account and Chain changes
+   */
+  useEffect(() => {
+    const ethereum = window.ethereum;
+    if (!ethereum) return;
 
     const handleAccountsChanged = (accounts: string[]) => {
       if (accounts.length > 0) {
@@ -124,12 +173,12 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
     const handleChainChanged = () => window.location.reload();
 
-    (window as any).ethereum.on("accountsChanged", handleAccountsChanged);
-    (window as any).ethereum.on("chainChanged", handleChainChanged);
+    ethereum.on("accountsChanged", handleAccountsChanged);
+    ethereum.on("chainChanged", handleChainChanged);
 
     return () => {
-      (window as any).ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      (window as any).ethereum.removeListener("chainChanged", handleChainChanged);
+      ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      ethereum.removeListener("chainChanged", handleChainChanged);
     };
   }, [updateWalletInfo, disconnect]);
 
@@ -142,6 +191,8 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
         isConnected: !!address,
         isConnecting,
         isCorrectNetwork: chainId === SEPOLIA_CHAIN_ID,
+        provider,
+        signer,
         connect,
         disconnect,
         switchNetwork,
