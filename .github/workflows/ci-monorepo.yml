@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  # ─────────────────────────────────────────
+  # 1. Lint & type-check the whole monorepo
+  # ─────────────────────────────────────────
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm typecheck
+
+  # ─────────────────────────────────────────
+  # 2. Smart-contract tests (Forge)
+  # ─────────────────────────────────────────
+  contracts:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build --sizes
+
+      - name: Run unit tests
+        working-directory: packages/contracts
+        run: forge test -vvv --match-path "test/*.t.sol"
+
+      - name: Run integration tests
+        working-directory: packages/contracts
+        run: forge test -vvv --match-path "test/integration/*.t.sol"
+
+      - name: Run fuzz tests
+        working-directory: packages/contracts
+        run: forge test -vvv --match-path "test/fuzz/*.t.sol" --fuzz-runs 500
+
+      - name: Gas snapshot
+        working-directory: packages/contracts
+        run: forge snapshot --check --tolerance 2
+
+      - name: Coverage report
+        working-directory: packages/contracts
+        run: |
+          forge coverage --report lcov
+          echo "Coverage report generated"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: packages/contracts/lcov.info
+          flags: contracts
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ─────────────────────────────────────────
+  # 3. Mobile app tests (Jest + Detox build check)
+  # ─────────────────────────────────────────
+  mobile:
+    name: Mobile tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm --filter @crowdquest/mobile test --coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: apps/mobile/coverage/lcov.info
+          flags: mobile
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ─────────────────────────────────────────
+  # 4. Shared packages build check
+  # ─────────────────────────────────────────
+  packages:
+    name: Build shared packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build --filter=./packages/*
+
+  # ─────────────────────────────────────────
+  # 5. ABI sync check (generated ABIs match compiled)
+  # ─────────────────────────────────────────
+  abi-sync:
+    name: ABI sync check
+    runs-on: ubuntu-latest
+    needs: [contracts]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build
+
+      - name: Regenerate ABIs
+        run: bash scripts/utils/generate-abis.sh
+
+      - name: Check for ABI drift
+        run: |
+          if ! git diff --quiet apps/mobile/src/blockchain/contracts/; then
+            echo "❌ ABI drift detected. Run 'bash scripts/utils/generate-abis.sh' and commit the result."
+            git diff apps/mobile/src/blockchain/contracts/
+            exit 1
+          fi
+          echo "✅ ABIs are in sync"

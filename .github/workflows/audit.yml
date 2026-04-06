@@ -1,0 +1,105 @@
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/contracts/src/**"
+  schedule:
+    # Run every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  slither:
+    name: Slither static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        id: slither
+        with:
+          target: packages/contracts
+          slither-args: --checklist --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}
+          fail-on: high
+          sarif: results.sarif
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  mythril:
+    name: Mythril symbolic execution
+    runs-on: ubuntu-latest
+    # Only run on schedule or manual dispatch (slow)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build
+
+      - name: Run Mythril on CrowdQuest.sol
+        run: |
+          docker run \
+            -v ${{ github.workspace }}/packages/contracts:/contracts \
+            mythril/myth:latest \
+            analyze /contracts/src/CrowdQuest.sol \
+            --solc-json /contracts/remappings.txt \
+            --max-depth 12 \
+            -o json > mythril-report.json || true
+
+      - name: Upload Mythril report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mythril-report-${{ github.sha }}
+          path: mythril-report.json
+
+  aderyn:
+    name: Aderyn analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Aderyn
+        run: cargo install aderyn
+
+      - name: Run Aderyn
+        working-directory: packages/contracts
+        run: aderyn . --output report.md
+
+      - name: Upload Aderyn report
+        uses: actions/upload-artifact@v4
+        with:
+          name: aderyn-report-${{ github.sha }}
+          path: packages/contracts/report.md
+
+      - name: Post report summary
+        run: |
+          echo "### Aderyn Analysis" >> "$GITHUB_STEP_SUMMARY"
+          cat packages/contracts/report.md >> "$GITHUB_STEP_SUMMARY"
