@@ -134,8 +134,88 @@ export const useCrowdQuest = () => {
     const tx = await contract.claimRealTreasure(BigInt(id), secret);
     return await tx.wait();
   };
+  // Add these to your useCrowdQuest.ts return object
+
+  const getJoinedGames = async () => {
+    const contract = await getContract();
+    if (!contract || !address) return [];
+
+    const turnManagerAddr = await contract.turnManager();
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    const turnManager = new ethers.Contract(turnManagerAddr, TurnMangerABI.abi, provider);
+
+    try {
+      const joinedQuests = [];
+      // Scan range (In a real app, you'd use Events/Indexing here)
+      for (let i = 10000; i < 10010; i++) {
+        const isParticipant = await turnManager.isPlayerInGame(i, address);
+        if (isParticipant) {
+          const q = await contract.virtualTreasures(i);
+          const currentTurnPlayer = await turnManager.getCurrentPlayer(i);
+          const turnNum = await turnManager.getCurrentTurnNumber(i);
+
+          joinedQuests.push({
+            id: i.toString(),
+            reward: ethers.formatEther(q.stake),
+            isMyTurn: currentTurnPlayer.toLowerCase() === address.toLowerCase(),
+            currentTester: currentTurnPlayer,
+            turnNumber: turnNum.toString(),
+            hints: q.hints
+          });
+        }
+      }
+      return joinedQuests;
+    } catch (e) {
+      console.error("Lobby fetch failed", e);
+      return [];
+    }
+  };
+    // Add these to your useCrowdQuest return object
+  const getMyTurnGames = async () => {
+    const contract = await getContract();
+    if (!contract || !address) return [];
+
+    try {
+      // 1. Get TurnManager Instance
+      const turnManagerAddr = await contract.turnManager();
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const turnManager = new ethers.Contract(turnManagerAddr, TurnMangerABI.abi, provider);
+
+      const activeGames = [];
+      // Note: In production, you'd use a Subgraph or Events. 
+      // For now, we scan the last 10 IDs starting from 10000
+      for (let i = 10000; i < 10010; i++) {
+        try {
+          // Check if the current user is in the player list for this quest
+          const isPlayer = await turnManager.isPlayerInGame(i, address);
+          
+          if (isPlayer) {
+            const quest = await contract.virtualTreasures(i);
+            const currentPlayer = await turnManager.getCurrentPlayer(i);
+            const turnNumber = await turnManager.getCurrentTurnNumber(i);
+
+            activeGames.push({
+              id: i.toString(),
+              stake: ethers.formatEther(quest.stake),
+              currentPlayer: currentPlayer,
+              isMyTurn: currentPlayer.toLowerCase() === address.toLowerCase(),
+              turnNumber: turnNumber.toString(),
+              hints: quest.hints,
+              isFound: quest.found
+            });
+          }
+        } catch (e) { continue; }
+      }
+      return activeGames;
+    } catch (err) {
+      console.error("Lobby sync failed:", err);
+      return [];
+    }
+  };
 
   return { 
+    getMyTurnGames,
+    getJoinedGames,
     getActiveQuests, 
     claimRealTreasure,
     createVirtualQuest,

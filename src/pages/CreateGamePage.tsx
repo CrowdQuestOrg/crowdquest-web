@@ -97,6 +97,7 @@ const CreateGamePage = () => {
 
   // 4. Final Deployment to Blockchain
   const handleCreate = async () => {
+    
     if (!mode || !address) return;
     
     // DATA SANITIZATION: Prevents "Invalid array value" errors
@@ -111,6 +112,7 @@ const CreateGamePage = () => {
         variant: "destructive" 
       });
       return;
+    
     }
 
     setLoading(true);
