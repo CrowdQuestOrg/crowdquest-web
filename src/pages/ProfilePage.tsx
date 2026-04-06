@@ -1,177 +1,8 @@
-
-
-
-// import { Link } from "react-router-dom";
-// import { useEffect, useState } from "react";
-// import StatCard from "../components/StatCard";
-// import { Button } from "../components/ui/button";
-// import { Trophy, Coins, MapPin, Grid3X3, Target, Zap, Star, Plus, Loader2 } from "lucide-react";
-// import { useWallet } from "../contexts/WalletContext";
-// import { useProfile } from "../hooks/useProfile"; // Your new hook
-
-// const badges = [
-//   { name: "First Treasure", icon: Star, minScore: 100 },
-//   { name: "Speed Demon", icon: Zap, minScore: 500 },
-//   { name: "Treasure Hunter", icon: Trophy, minScore: 1000 },
-//   { name: "Master Hider", icon: MapPin, minScore: 2000 },
-// ];
-
-// const ProfilePage = () => {
-//   const { address, isConnected, balance: ethBalance } = useWallet();
-//   const { getStats } = useProfile();
-  
-//   const [loading, setLoading] = useState(true);
-//   const [stats, setStats] = useState({
-//     score: "0",
-//     foundCount: "0",
-//     createdCount: "0",
-//     accuracy: "0"
-//   });
-
-//   const displayAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect Wallet";
-
-//   useEffect(() => {
-//     const fetchStats = async () => {
-//       if (isConnected && address) {
-//         setLoading(true);
-//         try {
-//           const data = await getStats();
-//           if (data) {
-//             setStats({
-//               score: data.score,
-//               foundCount: data.foundCount,
-//               createdCount: data.createdCount,
-//               accuracy: data.foundCount !== "0" ? "67%" : "0%" // Derived logic
-//             });
-//           }
-//         } catch (error) {
-//           console.error("Error fetching profile stats:", error);
-//         } finally {
-//           setLoading(false);
-//         }
-//       }
-//     };
-//     fetchStats();
-//   }, [isConnected, address, getStats]);
-
-//   if (!isConnected) {
-//     return (
-//       <div className="container py-20 text-center">
-//         <h2 className="text-2xl font-bold mb-4">Please Connect Your Wallet</h2>
-//         <p className="text-muted-foreground mb-8">You need to be connected to Sepolia to view your profile.</p>
-//       </div>
-//     );
-//   }
-
-//   return (
-//     <div className="container py-8">
-//       {/* Header */}
-//       <div className="mb-8 flex items-center justify-between">
-//         <div className="flex items-center gap-4">
-//           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-display text-xl font-bold shadow-lg">
-//             CQ
-//           </div>
-//           <div>
-//             <h1 className="font-display text-xl font-bold text-foreground">{displayAddr}</h1>
-//             <div className="flex items-center gap-2 mt-1">
-//               <span className="rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-foreground">Explorer</span>
-//               <span className="text-xs text-muted-foreground flex items-center gap-1">
-//                 {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : `Score: ${stats.score}`}
-//               </span>
-//             </div>
-//           </div>
-//         </div>
-//         <Link to="/create">
-//           <Button variant="hero" className="gap-2">
-//             <Plus className="h-4 w-4" />
-//             Create Game
-//           </Button>
-//         </Link>
-//       </div>
-
-//       {/* Stats - Live data from contract */}
-//       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-//         <StatCard 
-//           icon={Coins} 
-//           label="CQT Tokens" 
-//           value={`${stats.score} CQT`} 
-//           sub={`Wallet: ${parseFloat(ethBalance || "0").toFixed(4)} ETH`} 
-//         />
-//         <StatCard 
-//           icon={MapPin} 
-//           label="Treasures Found" 
-//           value={stats.foundCount} 
-//           sub="On-chain verified" 
-//         />
-//         <StatCard 
-//           icon={Grid3X3} 
-//           label="Quests Created" 
-//           value={stats.createdCount} 
-//           sub="Active on Sepolia" 
-//         />
-//         <StatCard 
-//           icon={Target} 
-//           label="Accuracy" 
-//           value={stats.accuracy} 
-//           sub="Success rate" 
-//         />
-//       </div>
-
-//       {/* Badges - Dynamically earned based on score */}
-//       <div className="mb-8">
-//         <h2 className="font-display text-lg font-bold text-foreground mb-4">Achievements</h2>
-//         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-//           {badges.map((badge) => {
-//             const isEarned = Number(stats.score) >= badge.minScore;
-//             return (
-//               <div
-//                 key={badge.name}
-//                 className={`flex flex-col items-center rounded-xl border p-4 text-center transition-all ${
-//                   isEarned
-//                     ? "bg-accent/10 border-accent/30 shadow-md scale-105"
-//                     : "bg-card opacity-40 grayscale"
-//                 }`}
-//               >
-//                 <badge.icon className={`h-8 w-8 ${isEarned ? "text-accent" : "text-muted-foreground"}`} />
-//                 <span className="mt-2 text-xs font-medium text-foreground">{badge.name}</span>
-//                 {!isEarned && <span className="text-[10px] text-muted-foreground mt-1">{badge.minScore} pts</span>}
-//               </div>
-//             );
-//           })}
-//         </div>
-//       </div>
-
-//       {/* Recent Activity - Placeholder for Event Logs */}
-//       <div>
-//         <h2 className="font-display text-lg font-bold text-foreground mb-4">Recent Activity</h2>
-//         <div className="space-y-2">
-//           {Number(stats.foundCount) === 0 && Number(stats.createdCount) === 0 ? (
-//             <div className="text-center py-10 border rounded-lg bg-card/50">
-//               <p className="text-sm text-muted-foreground">No recent activity on Sepolia yet.</p>
-//             </div>
-//           ) : (
-//             <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
-//               <div>
-//                 <p className="text-sm font-medium text-foreground">Verified Hunter Status</p>
-//                 <p className="text-xs text-muted-foreground">Live on Chain ID 11155111</p>
-//               </div>
-//               <span className="text-sm font-semibold text-primary">Synced</span>
-//             </div>
-//           )}
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default ProfilePage;
-
-
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import StatCard from "../components/StatCard";
 import { Button } from "../components/ui/button";
-import { Trophy, Coins, MapPin, Grid3X3, Target, Zap, Star, Plus, Loader2 } from "lucide-react";
+import { Trophy, Coins, MapPin, Grid3X3, Target, Zap, Star, Plus, Loader2, UserPlus, Terminal } from "lucide-react";
 import { useWallet } from "../contexts/WalletContext";
 import { useProfile } from "../hooks/useProfile";
 
@@ -184,35 +15,31 @@ const badges = [
 
 const ProfilePage = () => {
   const { address, isConnected, balance: ethBalance } = useWallet();
-  const { getStats } = useProfile();
+  const { getStats, createProfile } = useProfile();
   
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    username: "",
-    totalEarned: "0",
-    questsCompleted: 0,
-    questsCreated: 0,
-    accuracy: "0%"
-  });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [stats, setStats] = useState<any>(null);
 
   const displayAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect Wallet";
 
   useEffect(() => {
     const fetchStats = async () => {
-      // FIX 1: Pass 'address' to getStats(address)
       if (isConnected && address) {
         setLoading(true);
         try {
           const data = await getStats(address);
           if (data) {
-            // FIX 2: Map the names to what the contract actually returns
             setStats({
               username: data.username,
               totalEarned: data.totalEarned,
               questsCompleted: data.questsCompleted,
               questsCreated: data.questsCreated,
-              accuracy: data.questsCompleted > 0 ? "100%" : "0%" 
+              accuracy: data.accuracy || "0%"
             });
+          } else {
+            setStats(null); // Explicitly null means needs registration
           }
         } catch (error) {
           console.error("Error fetching profile stats:", error);
@@ -224,15 +51,72 @@ const ProfilePage = () => {
     fetchStats();
   }, [isConnected, address, getStats]);
 
+  const handleRegister = async () => {
+    if (!usernameInput) return;
+    setIsRegistering(true);
+    try {
+      await createProfile(usernameInput);
+      window.location.reload(); 
+    } catch (err) {
+      console.error("Registration failed", err);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   if (!isConnected) {
     return (
       <div className="container py-20 text-center">
-        <h2 className="text-2xl font-bold mb-4">Please Connect Your Wallet</h2>
+        <h2 className="text-2xl font-bold mb-4 italic uppercase font-display">Authentication_Required</h2>
         <p className="text-muted-foreground mb-8">You need to be connected to view your profile.</p>
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // --- REGISTRATION UI (If profile doesn't exist) ---
+  if (!stats) {
+    return (
+      <div className="container max-w-lg py-20">
+        <div className="rounded-3xl border bg-card p-10 shadow-xl space-y-6">
+          <div className="flex items-center gap-3">
+            <Terminal className="h-5 w-5 text-primary" />
+            <h1 className="font-display text-xl font-bold italic uppercase">Initialize_Explorer</h1>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Your address is not registered on-chain. Create a callsign to start tracking your legacy.
+          </p>
+          <div className="space-y-4">
+            <input 
+              type="text"
+              placeholder="Enter Callsign..."
+              className="w-full rounded-xl border bg-background px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-primary outline-none"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+            />
+            <Button 
+              variant="hero" 
+              className="w-full py-6 font-bold uppercase tracking-widest"
+              disabled={isRegistering || !usernameInput}
+              onClick={handleRegister}
+            >
+              {isRegistering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+              Create Profile [+]
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- ORIGINAL UI (If profile exists) ---
   return (
     <div className="container py-8">
       {/* Header */}
@@ -248,7 +132,7 @@ const ProfilePage = () => {
             <div className="flex items-center gap-2 mt-1">
               <span className="rounded-md bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent-foreground">Explorer</span>
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : `Total Earned: ${stats.totalEarned} CQT`}
+                {`Total Earned: ${stats.totalEarned} CQT`}
               </span>
             </div>
           </div>
@@ -261,7 +145,7 @@ const ProfilePage = () => {
         </Link>
       </div>
 
-      {/* Stats - Live data from contract */}
+      {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard 
           icon={Coins} 
@@ -289,7 +173,7 @@ const ProfilePage = () => {
         />
       </div>
 
-      {/* Badges - Based on totalEarned */}
+      {/* Badges Section */}
       <div className="mb-8">
         <h2 className="font-display text-lg font-bold text-foreground mb-4">Achievements</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -299,9 +183,7 @@ const ProfilePage = () => {
               <div
                 key={badge.name}
                 className={`flex flex-col items-center rounded-xl border p-4 text-center transition-all ${
-                  isEarned
-                    ? "bg-accent/10 border-accent/30 shadow-md scale-105"
-                    : "bg-card opacity-40 grayscale"
+                  isEarned ? "bg-accent/10 border-accent/30 shadow-md scale-105" : "bg-card opacity-40 grayscale"
                 }`}
               >
                 <badge.icon className={`h-8 w-8 ${isEarned ? "text-accent" : "text-muted-foreground"}`} />
@@ -313,23 +195,17 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Activity Section */}
       <div>
         <h2 className="font-display text-lg font-bold text-foreground mb-4">Recent Activity</h2>
         <div className="space-y-2">
-          {stats.questsCompleted === 0 && stats.questsCreated === 0 ? (
-            <div className="text-center py-10 border rounded-lg bg-card/50">
-              <p className="text-sm text-muted-foreground">No recent activity on-chain yet.</p>
+          <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Active Explorer Status</p>
+              <p className="text-xs text-muted-foreground">Address: {displayAddr}</p>
             </div>
-          ) : (
-            <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">Active Explorer Status</p>
-                <p className="text-xs text-muted-foreground">Address: {displayAddr}</p>
-              </div>
-              <span className="text-sm font-semibold text-primary">Synced</span>
-            </div>
-          )}
+            <span className="text-sm font-semibold text-primary">Synced</span>
+          </div>
         </div>
       </div>
     </div>
