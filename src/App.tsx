@@ -11,6 +11,7 @@ import ScanPage from "./pages/ScanPage.tsx";
 import ProfilePage from "./pages/ProfilePage.tsx";
 import CreateGamePage from "./pages/CreateGamePage.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import { LobbySetupPage } from "../src/pages/LobbySetupPage.tsx";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/scan" element={<ScanPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/create" element={<CreateGamePage />} />
+              <Route path="/lobby/:lobbyId" element={<LobbySetupPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
