@@ -1,56 +1,54 @@
-// import { ethers } from "ethers";
-// import { TOKEN_ADDRESS, CROWD_QUEST_ADDRESS } from "../constants/contracts";
-// import TokenABI from "../abis/CrowdQuestToken.json";
-
-// export const useToken = () => {
-//   const getContract = async () => {
-//     if (!(window as any).ethereum) return null;
-//     const provider = new ethers.BrowserProvider((window as any).ethereum);
-//     const signer = await provider.getSigner();
-//     return new ethers.Contract(TOKEN_ADDRESS, TokenABI.abi, signer);
-//   };
-
-//   // Check how much the CrowdQuest contract is allowed to spend
-//   const checkAllowance = async (ownerAddress: string) => {
-//     const contract: any = await getContract();
-//     const allowance = await contract.allowance(ownerAddress, CROWD_QUEST_ADDRESS);
-//     return ethers.formatEther(allowance);
-//   };
-
-//   // Approve the CrowdQuest contract to spend tokens
-//   const approve = async (amount: string) => {
-//     const contract: any = await getContract();
-//     const tx = await contract.approve(CROWD_QUEST_ADDRESS, ethers.parseEther(amount));
-//     return await tx.wait();
-//   };
-
-//   return { checkAllowance, approve };
-// };
-
-
 import { ethers, getAddress } from "ethers";
 import { TOKEN_ADDRESS, CROWD_QUEST_ADDRESS } from "../constants/contracts";
 import TokenABI from "../abis/CrowdQuestToken.json";
 
 export const useToken = () => {
-  const getContract = async () => {
-    if (!(window as any).ethereum) return null;
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    const signer = await provider.getSigner();
-    return new ethers.Contract(TOKEN_ADDRESS, TokenABI.abi, signer);
+  /**
+   * Internal helper to ensure addresses are EIP-55 compliant.
+   * This prevents the "bad address checksum" TypeError.
+   */
+  const sanitizeAddress = (addr: string): string => {
+    try {
+      return getAddress(addr.toLowerCase());
+    } catch (e) {
+      console.error(`Invalid address format: ${addr}`);
+      return addr;
+    }
   };
 
-  const checkAllowance = async (ownerAddress: string) => {
+  const getContract = async () => {
+    if (!(window as any).ethereum) return null;
+    
     try {
-      if (!ownerAddress) return "0";
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      
+      // Sanitize the Token Address itself just in case
+      const safeTokenAddress = sanitizeAddress(TOKEN_ADDRESS);
+      
+      return new ethers.Contract(safeTokenAddress, TokenABI.abi, signer);
+    } catch (error) {
+      console.error("Failed to initialize token contract:", error);
+      return null;
+    }
+  };
+
+  /**
+   * Checks how many tokens the CrowdQuest contract is allowed to spend
+   */
+  const checkAllowance = async (ownerAddress: string) => {
+    if (!ownerAddress) return "0";
+
+    try {
       const contract = await getContract();
       if (!contract) return "0";
+
+      // CRITICAL: Sanitize both addresses before the blockchain call
+      const safeOwner = sanitizeAddress(ownerAddress);
+      const safeSpender = sanitizeAddress(CROWD_QUEST_ADDRESS);
+
+      const allowance = await contract.allowance(safeOwner, safeSpender);
       
-      // We use getAddress on both to ensure checksums are perfect
-      const allowance = await contract.allowance(
-        getAddress(ownerAddress), 
-        getAddress(CROWD_QUEST_ADDRESS)
-      );
       return ethers.formatEther(allowance);
     } catch (error) {
       console.error("Allowance check failed:", error);
@@ -58,15 +56,25 @@ export const useToken = () => {
     }
   };
 
+  /**
+   * Grants permission to the CrowdQuest contract to move tokens
+   */
   const approve = async (amount: string) => {
     const contract = await getContract();
     if (!contract) throw new Error("Contract not initialized");
-    
-    const tx = await contract.approve(
-      getAddress(CROWD_QUEST_ADDRESS), 
-      ethers.parseEther(amount)
-    );
-    return await tx.wait();
+
+    try {
+      const safeSpender = sanitizeAddress(CROWD_QUEST_ADDRESS);
+      const parsedAmount = ethers.parseEther(amount);
+
+      const tx = await contract.approve(safeSpender, parsedAmount);
+      
+      console.log("Approval broadcasted:", tx.hash);
+      return await tx.wait();
+    } catch (error) {
+      console.error("Approval transaction failed:", error);
+      throw error;
+    }
   };
 
   return { checkAllowance, approve };

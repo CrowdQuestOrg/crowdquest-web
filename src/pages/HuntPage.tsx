@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import VirtualGrid from "../components/VirtualGrid";
 import { Button } from "../components/ui/button";
 import { 
@@ -13,82 +13,89 @@ import { useCrowdQuest } from "../hooks/useCrowdQuest";
 import { useToken } from "../hooks/useToken";
 import { useWallet } from "../contexts/WalletContext";
 import { useToast } from "../hooks/use-toast";
-import { notifyTransaction } from "../utils/transactionHelpers";
 
 const HuntPage = () => {
   const { toast } = useToast();
   const { address, isConnected } = useWallet();
   
-  // Hook Integrations
-  const { getActiveQuests, submitGuess } = useCrowdQuest();
+  const { getActiveQuests, submitVirtualGuess } = useCrowdQuest();
   const { checkAllowance, approve } = useToken();
 
-  // Blockchain Data State
+  // --- STATE MANAGEMENT ---
   const [quests, setQuests] = useState<any[]>([]);
   const [selectedQuestIndex, setSelectedQuestIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // First load only
+  const [isRefreshing, setIsRefreshing] = useState(false);       // Background sync
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Gameplay State
   const [guessX, setGuessX] = useState("");
   const [guessY, setGuessY] = useState("");
   const [currentHintLevel, setCurrentHintLevel] = useState(0);
 
-  const loadQuests = useCallback(async () => {
-    setIsLoading(true);
+  // --- STABLE DATA FETCHING ---
+  const loadQuests = useCallback(async (isSilent = false) => {
+    if (isSilent) setIsRefreshing(true);
+    else setIsInitialLoading(true);
+
     try {
       const data = await getActiveQuests();
       setQuests(data);
+      
+      // Prevent index-out-of-bounds if quests were removed/found
+      if (data.length > 0 && selectedQuestIndex >= data.length) {
+        setSelectedQuestIndex(0);
+      }
     } catch (error) {
+      console.error("Sync Error:", error);
       toast({
-        title: "Network Error",
-        description: "Could not sync with Sepolia nodes.",
+        title: "Grid_Sync_Failed",
+        description: "Failed to pull latest sector data.",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
     }
-  }, [getActiveQuests, toast]);
+  }, [getActiveQuests, selectedQuestIndex, toast]);
 
   useEffect(() => {
     loadQuests();
-  }, [loadQuests]);
+  }, []); // Run once on mount
 
+  // --- ACTION HANDLERS ---
   const handleGuess = async () => {
     if (!quests[selectedQuestIndex] || !address) return;
     if (guessX === "" || guessY === "") {
-      toast({ title: "Target coordinates missing", variant: "destructive" });
+      toast({ title: "Coordinates_Required", variant: "destructive" });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // 1. PRE-FLIGHT: Check if contract is allowed to spend user's tokens for the guess
       const currentAllowance = await checkAllowance(address);
       if (parseFloat(currentAllowance) < 1) {
-        toast({ title: "Allowance Required", description: "Approving CQT for gameplay..." });
-        const appTx = await approve("10"); // Approve 10 CQT for multiple guesses
-        notifyTransaction(appTx.hash);
-        await appTx.wait();
+        await approve("5"); 
       }
 
-      // 2. THE GUESS: Submit to Smart Contract
       const questId = quests[selectedQuestIndex].id;
-      const tx = await submitGuess(questId, Number(guessX), Number(guessY));
+      const tx = await submitVirtualGuess(
+        questId, 
+        Number(guessX), 
+        Number(guessY)
+      );
       
-      // 3. FEEDBACK: Instant Etherscan Link
-      notifyTransaction(tx.hash);
-      
+      toast({ title: "Signal_Transmitted", description: "Waiting for confirmation..." });
       await tx.wait();
       
-      toast({ title: "Target Hit!", description: "Transaction confirmed on-chain." });
+      toast({ title: "Scan_Successful", description: "Grid updated." });
       setGuessX("");
       setGuessY("");
-      loadQuests();
+      loadQuests(true); // Background refresh after win/guess
     } catch (error: any) {
+      const isCancel = error.code === 4001 || error.code === "ACTION_REJECTED";
       toast({ 
-        title: "Guess Failed", 
-        description: error.reason || "Check your CQT balance or gas.", 
+        title: isCancel ? "Action_Aborted" : "Guess_Failed", 
+        description: isCancel ? "User rejected signature." : "Transaction reverted.", 
         variant: "destructive" 
       });
     } finally {
@@ -96,139 +103,163 @@ const HuntPage = () => {
     }
   };
 
-  if (isLoading) {
+  // --- RENDER LOGIC ---
+
+  // 1. Initial Loading Screen (Only shows on first mount)
+  if (isInitialLoading) {
     return (
       <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-display animate-pulse">Syncing with Grid State...</p>
+        <div className="relative">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <div className="absolute inset-0 blur-md bg-primary/20 rounded-full animate-pulse" />
+        </div>
+        <p className="text-muted-foreground font-mono text-[10px] uppercase tracking-[0.3em] animate-pulse">
+          Establishing_Uplink...
+        </p>
       </div>
     );
   }
 
+  // 2. Empty State (Only if not loading and no quests found)
   if (quests.length === 0) {
     return (
-      <div className="container py-12 text-center max-w-md">
-        <div className="mb-6 rounded-full bg-accent/10 p-6 inline-block">
-          <AlertCircle className="h-12 w-12 text-accent" />
+      <div className="container py-20 text-center max-w-md animate-in fade-in zoom-in-95">
+        <div className="mb-6 rounded-3xl bg-accent/5 border border-accent/10 p-8 inline-block">
+          <AlertCircle className="h-12 w-12 text-accent/40" />
         </div>
-        <h1 className="font-display text-2xl font-bold mb-2">No Active Quests</h1>
-        <p className="text-muted-foreground mb-6 text-sm">
-          All treasures have been found or none have been created on this contract version yet.
+        <h1 className="font-display text-2xl font-black italic uppercase tracking-tighter mb-2">Sector_Empty</h1>
+        <p className="text-muted-foreground mb-8 text-xs uppercase tracking-widest leading-loose">
+          No active signals detected in this coordinate range.
         </p>
-        <Button onClick={loadQuests} variant="outline" className="gap-2">
-          <RefreshCcw className="h-4 w-4" /> Scan Again
+        <Button onClick={() => loadQuests()} variant="outline" className="gap-2 rounded-2xl border-primary/20">
+          <RefreshCcw className="h-4 w-4" /> RE-SCAN_GRID
         </Button>
       </div>
     );
   }
 
   const currentQuest = quests[selectedQuestIndex];
+  const availableHints = currentQuest.hints || ["Decrypting_Signal..."];
 
+  // 3. Main UI (Always visible during background refreshes)
   return (
-    <div className="container py-8">
-      {/* Header with Live Stats */}
+    <div className={`container py-8 max-w-6xl transition-all duration-500 ${isRefreshing ? 'opacity-60 grayscale-[0.2]' : 'opacity-100'}`}>
+      
+      {/* Header */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Live on Sepolia</span>
+            <span className={`h-2 w-2 rounded-full ${isRefreshing ? 'bg-orange-500' : 'bg-green-500'} animate-pulse`} />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {isRefreshing ? 'Syncing_Grid...' : 'Grid_Active // Sepolia'}
+            </span>
           </div>
-          <h1 className="font-display text-3xl font-bold text-foreground italic">VIRTUAL_HUNT</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Targeting Quest <span className="text-accent font-mono">#{currentQuest.id}</span>
+          <h1 className="font-display text-3xl font-black text-foreground italic uppercase tracking-tighter">Virtual_Hunt</h1>
+          <p className="text-sm text-muted-foreground mt-1 font-mono">
+            TARGET_ID: <span className="text-primary">#{currentQuest.id}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-            <Coins className="h-4 w-4 text-primary" />
-            <span className="text-sm font-bold">{currentQuest.reward} CQT</span>
+          <div className="bg-card border rounded-2xl px-5 py-3 flex items-center gap-3 shadow-sm">
+            <Coins className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase leading-none">Bounty</p>
+              <p className="text-lg font-black font-mono leading-none mt-1">{currentQuest.reward} <span className="text-xs">CQT</span></p>
+            </div>
           </div>
-          <Button onClick={loadQuests} variant="ghost" size="icon" className="h-9 w-9">
-            <RefreshCcw className="h-4 w-4" />
+          <Button 
+            disabled={isRefreshing}
+            onClick={() => loadQuests(true)} 
+            variant="secondary" 
+            size="icon" 
+            className="h-12 w-12 rounded-2xl"
+          >
+            <RefreshCcw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_350px]">
+      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
         {/* Interaction Layer */}
-        <div className="rounded-2xl border bg-card/50 p-2 shadow-inner">
+        <div className="rounded-3xl border bg-card p-3 shadow-2xl overflow-hidden relative">
           <VirtualGrid 
             onCellSelect={(x, y) => {
               setGuessX(x.toString());
               setGuessY(y.toString());
             }} 
+            selectedCellProp={guessX ? { x: Number(guessX), y: Number(guessY) } : null}
           />
         </div>
 
         <div className="space-y-6">
-          {/* Progressive Hint System */}
+          {/* Hints Section */}
           <div className="rounded-2xl border bg-card p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Lightbulb className="h-5 w-5 text-primary" />
-              <h3 className="font-display text-md font-bold italic underline decoration-primary/30">DECRYPTED_HINTS</h3>
+              <h3 className="font-display text-md font-bold italic uppercase tracking-tight">Decrypted_Hints</h3>
             </div>
             <div className="space-y-3">
-              {currentQuest.hints.slice(0, currentHintLevel + 1).map((hint: string, i: number) => (
-                <div key={i} className="rounded-xl border bg-muted/30 p-4 border-l-4 border-l-primary animate-in fade-in slide-in-from-left-2">
-                  <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-tighter">Transmission {i + 1}</p>
-                  <p className="text-sm text-foreground leading-relaxed">{hint}</p>
+              {availableHints.slice(0, currentHintLevel + 1).map((hint: string, i: number) => (
+                <div key={i} className="rounded-xl border bg-muted/20 p-4 border-l-4 border-l-primary animate-in fade-in slide-in-from-left-2">
+                  <p className="text-[9px] font-black text-primary mb-1 uppercase tracking-widest">Layer_0{i + 1}</p>
+                  <p className="text-sm text-foreground leading-relaxed font-medium">{hint}</p>
                 </div>
               ))}
               
-              {currentHintLevel < currentQuest.hints.length - 1 && (
+              {currentHintLevel < availableHints.length - 1 && (
                 <button
                   onClick={() => setCurrentHintLevel((c) => c + 1)}
-                  className="w-full text-center py-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest border-t border-dashed mt-2"
+                  className="w-full text-center py-3 text-[10px] font-black text-primary hover:bg-primary/5 rounded-lg transition-all uppercase tracking-[0.2em] border border-dashed border-primary/30 mt-2"
                 >
-                  Decode next hint [+]
+                  Unlock Next Hint Layer [+]
                 </button>
               )}
             </div>
           </div>
 
-          {/* Transaction Panel */}
-          <div className="rounded-2xl border bg-card p-6 shadow-sm border-t-4 border-t-primary">
-            <h3 className="font-display text-md font-bold mb-4 uppercase italic">Execute Guess</h3>
+          {/* Action Section */}
+          <div className="rounded-2xl border bg-card p-6 shadow-sm border-b-4 border-b-primary">
+            <h3 className="font-display text-md font-black mb-4 uppercase italic tracking-tighter">Execute_Guess</h3>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">X-Axis</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-widest">X_COORD</label>
                 <input
                   type="number"
                   value={guessX}
                   onChange={(e) => setGuessX(e.target.value)}
                   className="w-full rounded-xl border bg-background px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-primary focus:outline-none transition-all"
-                  placeholder="000"
+                  placeholder="0"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Y-Axis</label>
+                <label className="text-[10px] font-black text-muted-foreground uppercase ml-1 tracking-widest">Y_COORD</label>
                 <input
                   type="number"
                   value={guessY}
                   onChange={(e) => setGuessY(e.target.value)}
                   className="w-full rounded-xl border bg-background px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-primary focus:outline-none transition-all"
-                  placeholder="000"
+                  placeholder="0"
                 />
               </div>
             </div>
             
             <Button 
               variant="hero" 
-              className="w-full py-6 text-md font-bold uppercase tracking-widest" 
+              className="w-full py-7 text-lg font-black uppercase italic tracking-widest rounded-xl shadow-lg" 
               onClick={handleGuess}
-              disabled={isSubmitting || !isConnected}
+              disabled={isSubmitting || !isConnected || isRefreshing}
             >
               {isSubmitting ? (
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
               ) : (
-                <Send className="h-5 w-5 mr-2" />
+                <Send className="h-6 w-6 mr-2" />
               )}
-              {isSubmitting ? "Mining..." : "Transmit Guess"}
+              {isSubmitting ? "Processing..." : "Transmit_Guess"}
             </Button>
             
             {!isConnected && (
-              <p className="mt-4 text-[10px] text-destructive text-center font-bold animate-pulse">
-                WALLET CONNECTION REQUIRED
+              <p className="mt-4 text-[10px] text-destructive text-center font-black animate-pulse uppercase tracking-widest">
+                Critical: Wallet Offline
               </p>
             )}
           </div>
