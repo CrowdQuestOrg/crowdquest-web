@@ -105,11 +105,21 @@ const ScanPage = () => {
       setQuestId("");
     } catch (error: any) {
       console.error(error);
-      toast({ 
-        title: "Verification Failed", 
-        description: error.reason || "Invalid secret or quest already claimed.", 
-        variant: "destructive" 
-      });
+      const reason = error.reason || error.message;
+  
+      if (reason.includes("Wrong secret")) {
+        toast({ 
+          title: "Authentication Failed", 
+          description: "The scanned secret does not match this Quest ID.", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Verification Failed", 
+          description: "Transaction reverted. Check your gas or Quest status.", 
+          variant: "destructive" 
+        });
+      }
     } finally {
       setIsClaiming(false);
     }
