@@ -220,7 +220,7 @@ const CreateGamePage = () => {
                 Target_Coordinates
               </h2>
               <div className="rounded-3xl border bg-card p-4 overflow-hidden">
-                <VirtualGrid onCellSelect={(x, y) => setSelectedCell({ x, y })} selectedCellProp={selectedCell} />
+                <VirtualGrid onCellSelect={(x, y) => setSelectedCell({ x, y })} selectedCellProp={selectedCell} showTreasures={false} />
               </div>
             </section>
           )}

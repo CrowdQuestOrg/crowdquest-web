@@ -1,27 +1,29 @@
 import { useState, useRef, useCallback } from "react";
 import { MapPin } from "lucide-react";
 import forestBg from "../assets/forest-grid-bg.jpg";
+
 const GRID_SIZE = 32;
 const CELL_SIZE = 28;
-
-const treasures = [
-  { x: 5, y: 8, id: 1 },
-  { x: 18, y: 12, id: 2 },
-  { x: 25, y: 3, id: 3 },
-  { x: 10, y: 22, id: 4 },
-  { x: 28, y: 28, id: 5 },
-];
 
 interface VirtualGridProps {
   onCellSelect?: (x: number, y: number) => void;
   selectedCellProp?: { x: number; y: number } | null;
+  // New Props for dynamic behavior
+  treasures?: any[]; 
+  showTreasures?: boolean;
 }
 
-const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
+const VirtualGrid = ({ 
+  onCellSelect, 
+  selectedCellProp, 
+  treasures = [], // Default to empty array
+  showTreasures = false // Default to hidden (Safe for Create Page)
+}: VirtualGridProps) => {
   const [selectedCellLocal, setSelectedCellLocal] = useState<{ x: number; y: number } | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Use prop if provided, otherwise use local state
   const selectedCell = selectedCellProp !== undefined ? selectedCellProp : selectedCellLocal;
 
   const handleCellClick = useCallback((x: number, y: number) => {
@@ -31,24 +33,32 @@ const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex items-center justify-between border-b px-4 py-3 bg-muted/20">
         <div>
-          <h3 className="font-display text-sm font-semibold text-foreground">Virtual Grid</h3>
-          <p className="text-xs text-muted-foreground">128×128 — {treasures.length} active treasures</p>
+          <h3 className="font-display text-sm font-bold uppercase tracking-tighter text-foreground italic">
+            Virtual_Grid_Link
+          </h3>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase">
+            {GRID_SIZE}×{GRID_SIZE} — {showTreasures ? treasures.length : 0} detected_signals
+          </p>
         </div>
         {selectedCell && (
-          <span className="rounded-md bg-accent/15 px-2 py-1 font-display text-xs font-medium text-accent-foreground">
-            ({selectedCell.x}, {selectedCell.y})
-          </span>
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-bold text-primary uppercase">Locked_Coords</span>
+            <span className="font-mono text-xs font-black text-foreground">
+              X:{selectedCell.x} Y:{selectedCell.y}
+            </span>
+          </div>
         )}
       </div>
+
       <div
         ref={containerRef}
-        className="relative overflow-auto p-2"
-        style={{ maxHeight: 400 }}
+        className="relative overflow-auto p-2 scrollbar-thin scrollbar-thumb-primary/20"
+        style={{ maxHeight: 500 }}
       >
         <div
-          className="relative"
+          className="relative shadow-2xl"
           style={{
             width: GRID_SIZE * CELL_SIZE,
             height: GRID_SIZE * CELL_SIZE,
@@ -59,18 +69,18 @@ const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
           }}
         >
           {/* Grid lines overlay */}
-          <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%" style={{ opacity: 0.25 }}>
+          <svg className="absolute inset-0 pointer-events-none" width="100%" height="100%" style={{ opacity: 0.15 }}>
             {Array.from({ length: GRID_SIZE + 1 }).map((_, i) => (
               <g key={i}>
                 <line
                   x1={i * CELL_SIZE} y1={0}
                   x2={i * CELL_SIZE} y2={GRID_SIZE * CELL_SIZE}
-                  stroke="hsl(var(--foreground))" strokeWidth={0.5}
+                  stroke="currentColor" strokeWidth={1}
                 />
                 <line
                   x1={0} y1={i * CELL_SIZE}
                   x2={GRID_SIZE * CELL_SIZE} y2={i * CELL_SIZE}
-                  stroke="hsl(var(--foreground))" strokeWidth={0.5}
+                  stroke="currentColor" strokeWidth={1}
                 />
               </g>
             ))}
@@ -84,11 +94,11 @@ const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
               return (
                 <div
                   key={`${x}-${y}`}
-                  className={`absolute cursor-crosshair transition-colors duration-75 ${
+                  className={`absolute cursor-crosshair transition-all duration-150 ${
                     isSelected
-                      ? "bg-accent/40 ring-1 ring-accent"
+                      ? "bg-primary/40 ring-2 ring-primary z-10 scale-105"
                       : isHovered
-                        ? "bg-accent/15"
+                        ? "bg-primary/10 border border-primary/30"
                         : ""
                   }`}
                   style={{
@@ -105,11 +115,11 @@ const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
             })
           )}
 
-          {/* Treasure markers */}
-          {treasures.map((t) => (
+          {/* Treasure markers (Only show if showTreasures is true) */}
+          {showTreasures && treasures.map((t) => (
             <div
               key={t.id}
-              className="absolute flex items-center justify-center animate-pulse-glow rounded-full bg-accent"
+              className="absolute flex items-center justify-center animate-pulse rounded-full bg-primary shadow-[0_0_15px_rgba(var(--primary),0.5)] z-20"
               style={{
                 left: t.x * CELL_SIZE + CELL_SIZE / 2 - 10,
                 top: t.y * CELL_SIZE + CELL_SIZE / 2 - 10,
@@ -117,7 +127,7 @@ const VirtualGrid = ({ onCellSelect, selectedCellProp }: VirtualGridProps) => {
                 height: 20,
               }}
             >
-              <MapPin className="h-3 w-3 text-accent-foreground" />
+              <MapPin className="h-3 w-3 text-primary-foreground" />
             </div>
           ))}
         </div>
